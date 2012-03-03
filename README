@@ -1,0 +1,12 @@
+# bumper
+A bare-bones telnet proxy that logs history while you're away.
+
+## Usage
+
+Don't.
+
+## License
+
+Copyright (C) 2012 B. D. Sanders
+
+Distributed under the Eclipse Public License, the same as Clojure.
