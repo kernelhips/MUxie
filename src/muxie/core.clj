@@ -3,9 +3,11 @@
   (:use [server.socket :only (create-server)]
 	[clojure.java.io :only (reader, writer)]
 	[clojure.string :only (lower-case, join)])
-  (:import [java.net Socket SocketException]))
+  (:require [muxie.hooks :as hooks])
+  (:import [java.net Socket SocketException])
+  (:gen-class))
 
-;; TODO: Lots; change user representation
+;; TODO: Lots
 
 ; of these Vars, only perc-commands does anything right now
 (def cmd-extensions (atom []))
@@ -46,7 +48,10 @@
   (not (nil? (:cxnin @uref))))
 
 (defn remove-user-out! [uref out]
-    (swap! uref #(assoc % :outs (vec (remove #{out} (:outs %))))))
+  (if (empty?
+       (:outs
+	(swap! uref #(assoc % :outs (vec (remove #{out} (:outs %)))))))
+    (hooks/run-hooks *user* :detached)))
 
 (defn clear-connection! [uref]
     (swap! uref assoc :cxnin nil :cxnout nil))
@@ -83,7 +88,7 @@
 (declare userprint)
 (defn print-user-log
   ([uref]
-     (userprint uref (join (deref (:log @uref)))))
+     (userprint uref (join "\n" (deref (:log @uref)))))
   ([] (print-user-log *user*)))
 
 (defn print-and-discard-user-log
@@ -113,7 +118,7 @@
 	  (catch SocketException sexc
 	    (remove-user-out! uref out))))
       
-      (userlog (:name @uref) msg))))
+      (userlog uref msg))))
 
 (defn userprintln
   [uref msg]
@@ -160,8 +165,8 @@
 	      (let [port (if (integer? port) port (Integer/parseInt port))
 		    {:keys [in out]} (open-connection server port)]
 		(swap! uref assoc :cxnin in :cxnout out)
-		(println "done")
 		(doto (Thread. #(conn-handler uref)) .start)
+		(hooks/run-hooks uref :connected)
 		uref))))
 
 (defn add-out-stream!
@@ -228,7 +233,9 @@
   (doseq [line lines]
     (userwrite *user* (str pref " " line))))
 
-(defn make-paste-state [pref]
+(def-perc-cmd paste
+  [pref]
+  (println "% Entering paste mode. Type . to finish or .q to abort. %")
   (let [lines (atom [])]
     (fn []
       (let [line (read-line)]
@@ -241,11 +248,6 @@
 	   (swap! lines conj line)
 	   :current))))))
 
-(def-perc-cmd paste
-  [pref]
-  (println "% Entering paste mode. Type . to finish or .q to abort. %")
-  (make-paste-state pref))
-
 (def-perc-cmd rept
   [times]
   (fn []
@@ -257,6 +259,11 @@
   [_]
   (println "% Reloading normal state. %")
   normal-state)
+
+(def-perc-cmd activity
+  [_]
+  (println "% Last activity seen: ")
+  (println "% Your last activity: "))
 					; Normal States
 (defn normal-state
   ([input]
@@ -315,3 +322,13 @@
   (def *server*
        (create-server 3586 #'got-input)))
 
+(defn -main []
+  (run-server))
+
+
+
+
+					; testing
+(defn detached-hook
+  [uref]
+  (userwrite uref "stat AFK"))

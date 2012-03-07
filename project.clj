@@ -1,5 +1,6 @@
 (defproject muxie "1.0.0-SNAPSHOT"
   :description "A MU bouncer"
+  :main muxie.core
   :dependencies [[org.clojure/clojure "1.3.0"]
 		 [server-socket "1.0.0"]]
 
